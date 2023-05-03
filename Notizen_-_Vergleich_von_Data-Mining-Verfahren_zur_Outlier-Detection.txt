@@ -1,0 +1,23 @@
+Notizen - Vergleich von Data-Mining-Verfahren zur Outlier-Detection
+-------------------------------------------------------------------
+
+https://www.dbs.ifi.lmu.de/Lehre/KDD/SS11/skript/kdd-6-Outlier-Detection.pdf
+- 3 "Definition nach Hawkins [Hawkins 1980]: “Ein Outlier ist eine Beobachtung, die sich von den anderen Beobachtungen so deutlich unterscheidet, daß man denken könnte, sie sei von einem anderen Mechanismus generiert worden.”"
+- 10 Outlier sind die Noise, die bei Cluster-Verfahren übrig bleibt
+	- nicht hilfreich, da Verfahren unterschiedlich gut sind und auch mehrere Outlier je nach Verfahren einem eigenen Cluster zugeordnet werden könnten
+
+
+
+Univariate Verfahren /q1s5
+
+Multivariate Verfahren /q1s5
+	MCD /q1s5
+	LTS /q1s5
+	Clustering /q1s5
+		K-Means /q1s5
+		Medoids Method /q1s5
+		Trimmed k-Means /q1s5 /alg: f47-49
+			Normales Clustering, nur dass potenzielle Ausreißer durch Wahl einer h-Teilmenge vom Verfahren ausgeschlossen werden /q1s5
+	Control Chart /q3
+	Linear Regression /q3
+	Manhattan Distance Techniques /q3
