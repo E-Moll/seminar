@@ -32,53 +32,59 @@ class Application:
                                  [f"{i + 1}" for i in range(MAX_ROWS_VALUES)]
 
     def refill_coordinate_lists(self):
-        self.outlier_x = [self.all_x[i] for i in self.outliers_indices]
-        self.outlier_y = [self.all_y[i] for i in self.outliers_indices]
+        self.x_outlier = [self.x_all[i] for i in self.outliers_indices]
+        self.y_outlier = [self.y_all[i] for i in self.outliers_indices]
 
-    def dbscan(self):
-        eps = 0.8
-        min_pts = 5
+    # def test(self):
+    #     self.outliers_indices = [i for i in range(len(self.x_all)) if abs(self.x_all[i] + self.y_all[i]) > 1.0]
+    #     self.refill_coordinate_lists()
 
-        # Record all distances between any two points that are at the most epsilon apart from each other
-        distances = {}
-        for i in range(len(self.all_data)):
-            for j in range(i + 1, len(self.all_data)):
-                # Calculate Distance
-                euclidean_distance = math.sqrt(pow(self.all_x[j] - self.all_x[i], 2) + pow(self.all_y[j] - self.all_y[i], 2))
-                # Check if the current two points are neighbors
-                if euclidean_distance <= eps:
-                    # If not already, save neighbors for each of the two points
-                    for k, l in zip([i, j], [j, i]):
-                        if tuple(self.all_data[k]) in distances:
-                            distances[tuple(self.all_data[k])].append(self.all_data[l])
-                        else:
-                            distances.update({tuple(self.all_data[k]): [self.all_data[l]]})
-
-        # Mark all those points as outliers that have less than min_pts neighbors TODO: outlier detection is currently inverted
-        self.outlier_x = []
-        self.outlier_y = []
-        self.num_of_outliers = 0
-        for item in distances.items():
-            if len(item[1]) < min_pts:  # item[1] is a list of all neighbors in the epsilon range
-                self.outlier_x.append(item[0][0])  # item[0][0] is the datapoint's x dimension
-                self.outlier_y.append(item[0][1])  # item[0][1] is the datapoint's y dimension
-                self.num_of_outliers += 1
-
-    def other(self):
-        # TODO
-        self.outliers_indices = [i for i in range(len(self.all_x)) if abs(self.all_x[i] + self.all_y[i]) > 1.0]
+    def mhl(self):
+        '''https://scikit-learn.org/stable/auto_examples/covariance/plot_mahalanobis_distances.html'''
+        emp_cov = covariance.EmpiricalCovariance()
+        emp_cov.fit(self.data_all)
+        mhl = emp_cov.mahalanobis(self.data_all)
+        self.outliers_indices = [i for i in range(len(self.x_all)) if math.sqrt(mhl[i]) > math.sqrt(scipy.stats.chi2.ppf(float(self.spinbox_msp_quantile.get()), self.data_all.shape[1]))]
         self.refill_coordinate_lists()
 
-    OUTLIER_METHODS = {"DBSCAN": dbscan, "Other procedure": other}
+    def rd(self):
+        '''https://scikit-learn.org/stable/auto_examples/covariance/plot_mahalanobis_distances.html'''
+        robust_cov = covariance.MinCovDet()
+        robust_cov.fit(self.data_all)
+        rd = robust_cov.mahalanobis(self.data_all)
+        self.outliers_indices = [i for i in range(len(self.x_all)) if math.sqrt(rd[i]) > math.sqrt(scipy.stats.chi2.ppf(float(self.spinbox_msp_quantile.get()), self.data_all.shape[1]))]
+        self.refill_coordinate_lists()
+
+    def lof(self):
+        lof = neighbors.LocalOutlierFactor(n_neighbors=int(self.spinbox_msp_neighbors.get()))
+        outlier_finding = lof.fit_predict(self.data_all)
+        self.x_outlier = [self.x_all[i] for i, e in enumerate(outlier_finding) if e == -1]
+        self.y_outlier = [self.y_all[i] for i, e in enumerate(outlier_finding) if e == -1]
+
+    def knn(self):
+        k = int(self.spinbox_msp_neighbors.get())
+        n = int(float(self.spinbox_num_dp.get()) * float(self.spinbox_msp_pc_outliers.get()) * 0.01)
+        knn = neighbors.NearestNeighbors(n_neighbors=k)
+        knn.fit(self.data_all)
+        a = knn.kneighbors()
+        greatest_distances = np.argsort(np.array(a[0])[:, k - 1])[-n:]
+        self.outliers_indices = [i for i in range(len(self.x_all)) if i in greatest_distances]
+        self.refill_coordinate_lists()
+
+    # def sdo(self):
+    #     '''Stahel Donoho Outlyingness'''
+    #     self.outliers_indices = [i for i in range(len(self.x_all)) if abs(self.x_all[i] + self.y_all[i]) > 0.3]
+    #     self.refill_coordinate_lists()
+
+    OUTLIER_METHODS = {"Mahalanobis Distance": mhl, "Robust Distance": rd, "Local Outlier Factor": lof, "K Nearest Neighbors": knn}
 
     # Some important variables
-    num_of_outliers = None
     outliers_indices = None
-    all_data = None
-    all_x = None
-    all_y = None
-    outlier_x = None
-    outlier_y = None
+    data_all = None
+    x_all = None
+    y_all = None
+    x_outlier = None
+    y_outlier = None
     selected_method = list(OUTLIER_METHODS.keys())[0]
 
     def replace(self, widget: tk.Widget, str_: str):
@@ -93,15 +99,15 @@ class Application:
 
         ## Graph ##
         # Create an array of x values
-        self.all_x = np.linspace(-5, 5, 101)
+        self.x_all = np.linspace(-5, 5, 101)
 
         # Calculate y values for a parabolic function
-        self.all_y = self.all_x ** 2
+        self.y_all = self.x_all ** 2
 
         # Create a figure and axes
         self.fig, self.ax = plt.subplots()
-        self.scatter_plot_all = self.ax.scatter(x=self.all_x, y=self.all_y, s=self.ALL_SIZE, c=self.VALID_POINT_COLOR)
-        self.scatter_plot_outlier = self.ax.scatter(x=self.all_x, y=self.all_y, s=self.OUTLIER_SIZE, c=self.OUTLIER_POINT_COLOR)
+        self.scatter_plot_all = self.ax.scatter(x=self.x_all, y=self.y_all, s=self.ALL_SIZE, c=self.VALID_POINT_COLOR)
+        self.scatter_plot_outlier = self.ax.scatter(x=self.x_all, y=self.y_all, s=self.OUTLIER_SIZE, c=self.OUTLIER_POINT_COLOR)
         self.ax.set_xlim(self.X_LIM[0], self.X_LIM[1])
         self.ax.set_ylim(self.Y_LIM[0], self.Y_LIM[1])
         self.ax.grid(True)
@@ -113,7 +119,7 @@ class Application:
         ctk.set_default_color_theme("dark-blue")
 
         self.root = ctk.CTk()
-        self.root.geometry("1750x950+70+30")
+        self.root.geometry("1000x600+30+30")
         self.root.title("Comparison of Data Mining Methods for Outlier Detection")
 
         ### Elements
@@ -139,7 +145,7 @@ class Application:
             self.update()
 
         def on_click_gen_new(event):
-            self.all_x, self.all_y, self.all_data = self.get_generated_values()
+            self.x_all, self.y_all, self.data_all = self.get_generated_values()
             self.update()
 
         for row, str_ in enumerate(self.FIRST_COLUMN_FIXED_STRINGS):
@@ -249,16 +255,16 @@ class Application:
                 self.label_msp_quantile.grid(row=6, column=0)
                 self.spinbox_msp_quantile.grid(row=6, column=1)
                 self.update()
-            # if self.selected_method == methods[2]:  # Local Outlier Factor
-            #     self.label_msp_neighbors.grid(row=6, column=0)
-            #     self.spinbox_msp_neighbors.grid(row=6, column=1)
-            #     self.update()
-            # if self.selected_method == methods[2]:  # K Nearest Neighbor
-            #     self.label_msp_neighbors.grid(row=6, column=0)
-            #     self.spinbox_msp_neighbors.grid(row=6, column=1)
-            #     self.label_msp_pc_outliers.grid(row=7, column=0)
-            #     self.spinbox_msp_pc_outliers.grid(row=7, column=1)
-            #     self.update()
+            if self.selected_method == methods[2]:  # Local Outlier Factor
+                self.label_msp_neighbors.grid(row=6, column=0)
+                self.spinbox_msp_neighbors.grid(row=6, column=1)
+                self.update()
+            if self.selected_method == methods[2]:  # K Nearest Neighbor
+                self.label_msp_neighbors.grid(row=6, column=0)
+                self.spinbox_msp_neighbors.grid(row=6, column=1)
+                self.label_msp_pc_outliers.grid(row=7, column=0)
+                self.spinbox_msp_pc_outliers.grid(row=7, column=1)
+                self.update()
 
         self.listbox_method.bind("<<ListboxSelect>>", on_select)
 
@@ -284,26 +290,26 @@ class Application:
 
     def update(self):
         ## Update mean
-        self.replace(self.table[len(self.EDITABLE_MEASURES)][1], f"{np.mean(self.all_x):.4f}")
-        self.replace(self.table[len(self.EDITABLE_MEASURES)][2], f"{np.mean(self.all_y):.4f}")
+        self.replace(self.table[len(self.EDITABLE_MEASURES)][1], f"{np.mean(self.x_all):.4f}")
+        self.replace(self.table[len(self.EDITABLE_MEASURES)][2], f"{np.mean(self.y_all):.4f}")
 
         # Update standard deviation
-        self.replace(self.table[len(self.EDITABLE_MEASURES) + 1][1], f"{np.std(self.all_x):.4f}")
-        self.replace(self.table[len(self.EDITABLE_MEASURES) + 1][2], f"{np.std(self.all_y):.4f}")
+        self.replace(self.table[len(self.EDITABLE_MEASURES) + 1][1], f"{np.std(self.x_all):.4f}")
+        self.replace(self.table[len(self.EDITABLE_MEASURES) + 1][2], f"{np.std(self.y_all):.4f}")
 
         # Calculate outliers
         self.OUTLIER_METHODS.get(self.selected_method)(self)
 
         # Update outlier percentage
-        percentage = 100.0 * self.num_of_outliers / int(self.spinbox_num_dp.get())
+        percentage = 100.0 * len(self.outliers_indices) / int(self.spinbox_num_dp.get())
         self.replace(self.table[self.NUM_OF_MEASURES - 1][1], f"{percentage:.1f}")
         self.replace(self.table[self.NUM_OF_MEASURES - 1][2], f"{percentage:.1f}")
 
         # Filling table
-        for i in range(self.NUM_OF_MEASURES, min(len(self.all_x), self.NUM_OF_MEASURES + self.MAX_ROWS_VALUES)):
-            self.replace(self.table[i][1], f"{self.all_x[i]:.2f}")
-            self.replace(self.table[i][2], f"{self.all_y[i]:.2f}")
-            if self.all_x[i] in self.outlier_x and self.all_y[i] in self.outlier_y:
+        for i in range(self.NUM_OF_MEASURES, min(len(self.x_all), self.NUM_OF_MEASURES + self.MAX_ROWS_VALUES)):
+            self.replace(self.table[i][1], f"{self.x_all[i]:.2f}")
+            self.replace(self.table[i][2], f"{self.y_all[i]:.2f}")
+            if i in self.outliers_indices:
                 color = self.OUTLIER_TEXT_COLOR
             else:
                 color = self.VALID_POINT_COLOR
@@ -312,8 +318,8 @@ class Application:
 
         ## Update graph
         # Redraw points
-        self.scatter_plot_all.set_offsets(np.c_[self.all_x, self.all_y])
-        self.scatter_plot_outlier.set_offsets(np.c_[self.outlier_x, self.outlier_y])
+        self.scatter_plot_all.set_offsets(np.c_[self.x_all, self.y_all])
+        self.scatter_plot_outlier.set_offsets(np.c_[self.x_outlier, self.y_outlier])
         self.ax.set_xlabel(self.table[0][1].get())
         self.ax.set_ylabel(self.table[0][2].get())
         self.canvas_graph.draw()
@@ -340,7 +346,7 @@ class Application:
 
     def init_values(self):
 
-        self.all_x, self.all_y, self.all_data = self.get_generated_values()
+        self.x_all, self.y_all, self.data_all = self.get_generated_values()
 
         self.update()
 
