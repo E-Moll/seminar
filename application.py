@@ -1,4 +1,6 @@
+import typing
 import math
+import random
 import tkinter as tk
 import customtkinter as ctk
 import matplotlib.backends.backend_tkagg as tkagg
@@ -10,11 +12,14 @@ from sklearn import *
 
 class Application:
     # Constants
-    NUM_DATAPOINTS_START = "30"
+    NUM_DATAPOINTS_START = "330"
     STEP_SIZE_DP = "100"
     NORMAL_PERCENTAGE_START = "80"
+    EPSILON_START = "0.8"
+    MINPTS_START = "5"
     EDITABLE_MEASURES = ["Data Point Nr.", "Min (for eq. dist.)", "Max (for eq. dist.)", "µ", "σ"]
-    INITIAL_VALUES = [["km/h", "# of cars"], [-10.0, 10.0, -10.0], [-10.0, 10.0, 10.0], [-10.0, 10.0, 1.5], [0.0, 10.0, 4.0]]  # [<MIN>, <MAX>, <INITIAL>]
+    INITIAL_VALUES = [["km/h", "# of cars"], [-10.0, 10.0, -10.0], [-10.0, 10.0, 10.0], [-10.0, 10.0, 1.5],
+                      [0.0, 10.0, 4.0]]  # [<MIN>, <MAX>, <INITIAL>]
     X_LIM = [-10.0, 10.0]
     Y_LIM = [-10.0, 10.0]
     STEP_SIZE_PERCENT = 2
@@ -35,7 +40,7 @@ class Application:
         self.outlier_x = [self.all_x[i] for i in self.outliers_indices]
         self.outlier_y = [self.all_y[i] for i in self.outliers_indices]
 
-    def dbscan(self):
+    def deprecated_outlier_detection_using_custom_dbscan(self):
         eps = 0.8
         min_pts = 5
 
@@ -44,7 +49,8 @@ class Application:
         for i in range(len(self.all_data)):
             for j in range(i + 1, len(self.all_data)):
                 # Calculate Distance
-                euclidean_distance = math.sqrt(pow(self.all_x[j] - self.all_x[i], 2) + pow(self.all_y[j] - self.all_y[i], 2))
+                euclidean_distance = math.sqrt(
+                    pow(self.all_x[j] - self.all_x[i], 2) + pow(self.all_y[j] - self.all_y[i], 2))
                 # Check if the current two points are neighbors
                 if euclidean_distance <= eps:
                     # If not already, save neighbors for each of the two points
@@ -64,12 +70,57 @@ class Application:
                 self.outlier_y.append(item[0][1])  # item[0][1] is the datapoint's y dimension
                 self.num_of_outliers += 1
 
+    def _range_query(self, db: np.ndarray, dist: typing.Callable[[tuple[float, float], tuple[float, float]], float], p: tuple[float, float], epsilon: float) -> list:
+        """Finds all neighbors in db of a point p in its epsilon neighborhood using dist as a measuring function.
+        p itself is included as the first element in the returned list."""
+        neighbors = [p]
+        for i in range(len(db)):
+            if tuple(db[i]) != tuple(p) and dist(p, db[i]) <= epsilon:  # Check if the current two points are neighbors
+                neighbors += [db[i]]
+        return neighbors
+
+    def dbscan_from_pseudocode(self):
+        db = self.all_data
+        epsilon = float(self.spinbox_msp_epsilon.get())  # 0.8
+        min_pts = int(self.spinbox_msp_minpts.get())  # 5
+        dist = lambda p, q: math.sqrt(pow(p[0] - q[0], 2) + pow(p[1] - q[1], 2))
+        label = {tuple(p): "undefined" for p in db}
+
+        for p in db:  # Iterate over every point
+            if label[tuple(p)] != "undefined":  # Skip processed points
+                continue
+            n = self._range_query(db, dist, p, epsilon)  # Find initial neighbors
+            if len(n) < min_pts:  # Non-core points are noise
+                label[tuple(p)] = "noise"
+                continue
+            c = random.random() * 0xffffff  # Start a new cluster / generate random new label that serves as color code
+            label[tuple(p)] = str(c)
+            s = n[1:]  # Expand neighborhood
+            for q in s:
+                if label[tuple(q)] == "noise":
+                    label[tuple(q)] = str(c)
+                if label[tuple(q)] != "undefined":
+                    continue
+                n = self._range_query(db, dist, q, epsilon)
+                label[tuple(q)] = str(c)
+                if len(n) < min_pts:  # Core-point check
+                    continue
+                s += n
+
+        # Gather outliers
+        self.outlier_x = []
+        self.outlier_y = []
+        for [x, y], v in label.items():
+            if v == "noise":
+                self.outlier_x += [x]
+                self.outlier_y += [y]
+
     def other(self):
         # TODO
         self.outliers_indices = [i for i in range(len(self.all_x)) if abs(self.all_x[i] + self.all_y[i]) > 1.0]
         self.refill_coordinate_lists()
 
-    OUTLIER_METHODS = {"DBSCAN": dbscan, "Other procedure": other}
+    OUTLIER_METHODS = {"DBSCAN From Pseudo Code": dbscan_from_pseudocode, "Other procedure": other}  # "Outlier Detection Using Custom DBSCAN": outlier_detection_using_custom_dbscan,
 
     # Some important variables
     num_of_outliers = None
@@ -101,7 +152,8 @@ class Application:
         # Create a figure and axes
         self.fig, self.ax = plt.subplots()
         self.scatter_plot_all = self.ax.scatter(x=self.all_x, y=self.all_y, s=self.ALL_SIZE, c=self.VALID_POINT_COLOR)
-        self.scatter_plot_outlier = self.ax.scatter(x=self.all_x, y=self.all_y, s=self.OUTLIER_SIZE, c=self.OUTLIER_POINT_COLOR)
+        self.scatter_plot_outlier = self.ax.scatter(x=self.all_x, y=self.all_y, s=self.OUTLIER_SIZE,
+                                                    c=self.OUTLIER_POINT_COLOR)
         self.ax.set_xlim(self.X_LIM[0], self.X_LIM[1])
         self.ax.set_ylim(self.Y_LIM[0], self.Y_LIM[1])
         self.ax.grid(True)
@@ -158,7 +210,9 @@ class Application:
                     c = tk.Entry(master=self.frame_table, justify=tk.CENTER, font=font)
                     self.replace(c, self.INITIAL_VALUES[row][col - 1])
                 elif row in range(1, len(self.EDITABLE_MEASURES)):
-                    c = tk.Spinbox(master=self.frame_table, from_=self.INITIAL_VALUES[row][0], to=self.INITIAL_VALUES[row][1], increment=0.05 * self.INITIAL_VALUES[row][1], justify=tk.CENTER, font=font)
+                    c = tk.Spinbox(master=self.frame_table, from_=self.INITIAL_VALUES[row][0],
+                                   to=self.INITIAL_VALUES[row][1], increment=0.05 * self.INITIAL_VALUES[row][1],
+                                   justify=tk.CENTER, font=font)
                     self.replace(c, self.INITIAL_VALUES[row][2])
                     c.bind("<Button-1>", on_click_gen_new)
                 else:
@@ -173,7 +227,8 @@ class Application:
         ## Settings
         self.label_num_dp = ctk.CTkLabel(master=self.frame_settings, text="# of data points:", justify=tk.LEFT,
                                          text_color=self.LABEL_COLOR)
-        self.spinbox_num_dp = tk.Spinbox(master=self.frame_settings, from_=0, to=50_000, increment=self.STEP_SIZE_DP, justify=tk.CENTER)
+        self.spinbox_num_dp = tk.Spinbox(master=self.frame_settings, from_=0, to=50_000, increment=float(self.STEP_SIZE_DP),
+                                         justify=tk.CENTER)
         self.spinbox_num_dp.bind("<Button-1>", on_click_gen_new)
         self.replace(self.spinbox_num_dp, self.NUM_DATAPOINTS_START)
 
@@ -186,7 +241,8 @@ class Application:
         def on_normal_pc_change():
             self.replace(self.spinbox_equal_pc, str(100.0 - float(self.spinbox_normal_pc.get())))
 
-        self.spinbox_normal_pc = tk.Spinbox(master=self.frame_settings, from_=0, to=100, increment=self.STEP_SIZE_PERCENT,
+        self.spinbox_normal_pc = tk.Spinbox(master=self.frame_settings, from_=0, to=100,
+                                            increment=self.STEP_SIZE_PERCENT,
                                             justify=tk.CENTER, command=on_normal_pc_change)
         self.spinbox_normal_pc.bind("<Button-1>", on_click_gen_new)
         self.replace(self.spinbox_normal_pc, self.NORMAL_PERCENTAGE_START)
@@ -199,55 +255,64 @@ class Application:
         def on_equal_pc_change():
             self.replace(self.spinbox_normal_pc, str(100.0 - float(self.spinbox_equal_pc.get())))
 
-        self.spinbox_equal_pc = tk.Spinbox(master=self.frame_settings, from_=0, to=100, increment=self.STEP_SIZE_PERCENT,
+        self.spinbox_equal_pc = tk.Spinbox(master=self.frame_settings, from_=0, to=100,
+                                           increment=self.STEP_SIZE_PERCENT,
                                            justify=tk.CENTER, command=on_equal_pc_change)
         self.spinbox_equal_pc.bind("<Button-1>", on_click_gen_new)
         self.replace(self.spinbox_equal_pc, str(100 - int(self.NORMAL_PERCENTAGE_START)))
         self.label_percent_2 = ctk.CTkLabel(master=self.frame_settings, text="%", justify=tk.LEFT,
                                             text_color=self.LABEL_COLOR)
 
-        self.label_method = tk.Label(master=self.frame_settings, text="Outlier Detection Method: " + self.selected_method, justify=tk.LEFT,
+        self.label_method = tk.Label(master=self.frame_settings,
+                                     text="Outlier Detection Method: " + self.selected_method, justify=tk.LEFT,
                                      fg=self.LABEL_COLOR)
-
-        self.label_msp_quantile = ctk.CTkLabel(master=self.frame_settings, text="Quantile:",
-                                               justify=tk.LEFT, text_color=self.LABEL_COLOR)
-        self.spinbox_msp_quantile = tk.Spinbox(master=self.frame_settings, from_=0, to=1, increment=0.05, justify=tk.CENTER)
-        self.spinbox_msp_quantile.bind("<Button-1>", on_click)
-        self.replace(self.spinbox_msp_quantile, "0.975")
-        self.label_msp_neighbors = ctk.CTkLabel(master=self.frame_settings, text="K Neighbors:",
-                                                justify=tk.LEFT, text_color=self.LABEL_COLOR)
-        self.spinbox_msp_neighbors = tk.Spinbox(master=self.frame_settings, from_=1, to=3000, increment=3, justify=tk.CENTER)
-        self.spinbox_msp_neighbors.bind("<Button-1>", on_click)
-        self.replace(self.spinbox_msp_neighbors, "5")
-        self.label_msp_pc_outliers = ctk.CTkLabel(master=self.frame_settings, text="Percentage of Outliers:",
-                                                  justify=tk.LEFT, text_color=self.LABEL_COLOR)
-        self.spinbox_msp_pc_outliers = tk.Spinbox(master=self.frame_settings, from_=0, to=100, increment=self.STEP_SIZE_PERCENT, justify=tk.CENTER)
-        self.spinbox_msp_pc_outliers.bind("<Button-1>", on_click)
-        self.replace(self.spinbox_msp_pc_outliers, "20")
 
         self.listbox_method = tk.Listbox(master=self.frame_settings)
         methods = list(self.OUTLIER_METHODS.keys())
         self.listbox_method.insert(0, *methods)
+
+        # Method specific parameter settings
+        self.label_msp_epsilon = ctk.CTkLabel(master=self.frame_settings, text="Epsilon:",
+                                              justify=tk.LEFT, text_color=self.LABEL_COLOR)
+        self.spinbox_msp_epsilon = tk.Spinbox(master=self.frame_settings, from_=0, to=20, increment=0.1,
+                                              justify=tk.CENTER)
+        self.spinbox_msp_epsilon.bind("<Button-1>", on_click)
+        self.replace(self.spinbox_msp_epsilon, self.EPSILON_START)
+        self.label_msp_minpts = ctk.CTkLabel(master=self.frame_settings, text="MinPts:",
+                                             justify=tk.LEFT, text_color=self.LABEL_COLOR)
+        self.spinbox_msp_minpts = tk.Spinbox(master=self.frame_settings, from_=1, to=1000, increment=3,
+                                             justify=tk.CENTER)
+        self.spinbox_msp_minpts.bind("<Button-1>", on_click)
+        self.replace(self.spinbox_msp_minpts, self.MINPTS_START)
+        # self.label_msp_pc_outliers = ctk.CTkLabel(master=self.frame_settings, text="Percentage of Outliers:",
+        #                                           justify=tk.LEFT, text_color=self.LABEL_COLOR)
+        # self.spinbox_msp_pc_outliers = tk.Spinbox(master=self.frame_settings, from_=0, to=100,
+        #                                           increment=self.STEP_SIZE_PERCENT, justify=tk.CENTER)
+        # self.spinbox_msp_pc_outliers.bind("<Button-1>", on_click)
+        # self.replace(self.spinbox_msp_pc_outliers, "20")
+
 
         def on_select(event):
             a = self.listbox_method.selection_get()
             if a == "0":
                 return
             self.selected_method = a
-            self.label_msp_quantile.grid_forget()
-            self.spinbox_msp_quantile.grid_forget()
-            self.label_msp_neighbors.grid_forget()
-            self.spinbox_msp_neighbors.grid_forget()
-            self.label_msp_pc_outliers.grid_forget()
-            self.spinbox_msp_pc_outliers.grid_forget()
+            self.label_msp_epsilon.grid_forget()
+            self.spinbox_msp_epsilon.grid_forget()
+            self.label_msp_minpts.grid_forget()
+            self.spinbox_msp_minpts.grid_forget()
+            # self.label_msp_pc_outliers.grid_forget()
+            # self.spinbox_msp_pc_outliers.grid_forget()
             self.label_method.config(text="Outlier Detection Method: " + self.selected_method)
-            if self.selected_method == methods[0]:  # Mahalanobis
-                self.label_msp_quantile.grid(row=6, column=0)
-                self.spinbox_msp_quantile.grid(row=6, column=1)
+            if self.selected_method == methods[0]:  # DBSCAN
+                self.label_msp_epsilon.grid(row=6, column=0)
+                self.spinbox_msp_epsilon.grid(row=6, column=1)
+                self.label_msp_minpts.grid(row=7, column=0)
+                self.spinbox_msp_minpts.grid(row=7, column=1)
                 self.update()
-            if self.selected_method == methods[1]:  # Robust Distance
-                self.label_msp_quantile.grid(row=6, column=0)
-                self.spinbox_msp_quantile.grid(row=6, column=1)
+            if self.selected_method == methods[1]:  # Other
+                self.label_msp_epsilon.grid(row=6, column=0)
+                self.spinbox_msp_epsilon.grid(row=6, column=1)
                 self.update()
             # if self.selected_method == methods[2]:  # Local Outlier Factor
             #     self.label_msp_neighbors.grid(row=6, column=0)
@@ -295,7 +360,7 @@ class Application:
         self.OUTLIER_METHODS.get(self.selected_method)(self)
 
         # Update outlier percentage
-        percentage = 100.0 * self.num_of_outliers / int(self.spinbox_num_dp.get())
+        percentage = 100.0 * len(self.outlier_x) / int(self.spinbox_num_dp.get())
         self.replace(self.table[self.NUM_OF_MEASURES - 1][1], f"{percentage:.1f}")
         self.replace(self.table[self.NUM_OF_MEASURES - 1][2], f"{percentage:.1f}")
 
@@ -323,7 +388,7 @@ class Application:
             np.random.normal(loc=float(self.table[3][1].get()),
                              scale=float(self.table[4][1].get()),
                              size=
-                                 int(float(self.spinbox_num_dp.get()) * float(self.spinbox_normal_pc.get()) * 0.01)),
+                             int(float(self.spinbox_num_dp.get()) * float(self.spinbox_normal_pc.get()) * 0.01)),
             np.random.uniform(low=float(self.table[1][1].get()),
                               high=float(self.table[2][1].get()),
                               size=int(
@@ -339,9 +404,7 @@ class Application:
         return x, y, np.concatenate([np.array([x]).T, np.array([y]).T], axis=1)
 
     def init_values(self):
-
         self.all_x, self.all_y, self.all_data = self.get_generated_values()
-
         self.update()
 
 
