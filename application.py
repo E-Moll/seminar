@@ -12,24 +12,27 @@ from sklearn import *
 
 class Application:
     # Constants
-    NUM_DATAPOINTS_START = "330"
+    NUM_DATAPOINTS_START = "1"
     STEP_SIZE_DP = "100"
     NORMAL_PERCENTAGE_START = "80"
-    EPSILON_START = "0.8"
+    EPSILON_START = "2.5"
     MINPTS_START = "5"
     EDITABLE_MEASURES = ["Data Point Nr.", "Min (for eq. dist.)", "Max (for eq. dist.)", "µ", "σ"]
     INITIAL_VALUES = [["km/h", "# of cars"], [-10.0, 10.0, -10.0], [-10.0, 10.0, 10.0], [-10.0, 10.0, 1.5],
                       [0.0, 10.0, 4.0]]  # [<MIN>, <MAX>, <INITIAL>]
     X_LIM = [-10.0, 10.0]
-    Y_LIM = [-10.0, 10.0]
+    Y_LIM = [-7.5, 7.5]
     STEP_SIZE_PERCENT = 2
     VALID_POINT_COLOR = "#00007f"
+    EPSILON_RANGE_RED_COLOR = "#ff0000"
+    EPSILON_RANGE_GRAY_3_COLOR = "#999999"
+    EPSILON_RANGE_GRAY_2_COLOR = "#bbbbbb"
+    EPSILON_RANGE_GRAY_1_COLOR = "#eeeeee"
     OUTLIER_TEXT_COLOR = "#ff9507"
     OUTLIER_POINT_COLOR = OUTLIER_TEXT_COLOR  # "#ffcc33"
     LABEL_COLOR = "#00007f"
     ALL_SIZE = 25
     OUTLIER_SIZE = 10
-
     MAX_ROWS_VALUES = 35
     NON_EDITABLE_MEASURES = ["Mean", "Standard Deviation", "% Marked As Outliers"]
     NUM_OF_MEASURES = len(EDITABLE_MEASURES) + len(NON_EDITABLE_MEASURES)
@@ -131,6 +134,9 @@ class Application:
     outlier_x = None
     outlier_y = None
     selected_method = list(OUTLIER_METHODS.keys())[0]
+    current_circle = None
+    last_circle = None
+    second_to_last_circle = None
 
     def replace(self, widget: tk.Widget, str_: str):
         state = widget.cget("state")
@@ -181,6 +187,25 @@ class Application:
 
         ## Graph
         self.canvas_graph = tkagg.FigureCanvasTkAgg(self.fig, master=self.frame_graph)
+        def on_graph_click(event):
+            x = event.xdata
+            y = event.ydata
+            if x is not None and y is not None:
+                self.all_data = np.append(self.all_data, [[x, y]], axis=0)
+                self.all_x = np.append(self.all_x, x)
+                self.all_y = np.append(self.all_y, y)
+                if self.second_to_last_circle is not None:
+                    self.second_to_last_circle.set_color(self.EPSILON_RANGE_GRAY_1_COLOR)
+                if self.last_circle is not None:
+                    self.last_circle.set_color(self.EPSILON_RANGE_GRAY_2_COLOR)
+                    self.second_to_last_circle = self.last_circle
+                if self.current_circle is not None:
+                    self.current_circle.set_color(self.EPSILON_RANGE_GRAY_3_COLOR)
+                    self.last_circle = self.current_circle
+                self.current_circle = plt.Circle((x, y), float(self.spinbox_msp_epsilon.get()), color=self.EPSILON_RANGE_RED_COLOR, fill=False)
+                plt.gca().add_artist(self.current_circle)
+                self.update()
+        self.canvas_graph.mpl_connect("button_press_event", on_graph_click)
         self.canvas_graph.draw()
         self.canvas_graph.get_tk_widget().pack()
 
