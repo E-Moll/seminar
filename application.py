@@ -6,15 +6,20 @@ import customtkinter as ctk
 import matplotlib.backends.backend_tkagg as tkagg
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.ensemble import IsolationForest
 
 
 class Application:
     # Constants
+    WINDOW_GEOMETRY = "1750x950+70+30"
     NUM_DATAPOINTS_START = "1"
     STEP_SIZE_DP = "100"
     NORMAL_PERCENTAGE_START = "80"
     EPSILON_START = "2.5"
     MINPTS_START = "5"
+    T_START = "100"
+    PSI_START = "256"
+    ANOMALY_SCORE_THRESHOLD_START = "0.5"
     EDITABLE_MEASURES = ["Data Point Nr.", "Min (for eq. dist.)", "Max (for eq. dist.)", "µ", "σ"]
     INITIAL_VALUES = [["km/h", "# of cars"], [-10.0, 10.0, -10.0], [-10.0, 10.0, 10.0], [-10.0, 10.0, 1.5],
                       [0.0, 10.0, 4.0]]  # [<MIN>, <MAX>, <INITIAL>]
@@ -87,44 +92,22 @@ class Application:
                 self.outlier_x += [x]
                 self.outlier_y += [y]
 
-    class ITree:
-        def __init__(self, x, current_tree_height, height_limit):
-            self.x = x
-            self.e = current_tree_height
-            self.l = height_limit
+    def iforest_from_sklearn(self):
+        """https://scikit-learn.org/stable/auto_examples/ensemble/plot_isolation_forest.html#sphx-glr-auto-examples-ensemble-plot-isolation-forest-py"""
+        t = int(self.spinbox_msp_t.get())  # 100
+        psi = int(self.spinbox_msp_psi.get())  # 256
+        anomaly_score_threshold = float(self.spinbox_msp_anomaly_score_threshold.get())  # 0.6
 
-            if self.e >= self.l or len(self.x) <= 1:
-                return None  # TODO return exNode{Size ← |X|}
-            else:
-                # random_attribute
-                if random.randint(0, 1) == 0:
-                    q = Application.all_x
-                else:
-                    q = Application.all_y
-                min_q = min(q)
-                p = (random.random() * max(q) - min_q) + min_q  # random_split_value
+        # Build the tree
+        clf = IsolationForest(n_estimators=t, max_samples=psi, random_state=0)
+        clf.fit(self.all_data)
 
-    def _sample(self, x, psi):
-        return None  # TODO
-
-    def _iforest(self, x: list, t: int, psi: int) -> list:
-        forest = []  # TODO Initialize Forest
-        l = math.ceil(math.log(x=psi, base=2))
-        for i in range(t):
-            x_ = self._sample(x, psi)
-            forest += [self.ITree(x_, 0, l)]
-        return forest
-
-    def iforest_from_pseudocode(self):
-        # Creation of forest
-        itrees = self._iforest(x=self.all_data, t=100, psi=256)
-
-        # Evaluation of data
-        anomaly_score_threshold = 0.6
-        self.outliers_indices = [i for i in range(len(self.all_x)) if s(x, n) > 1.0]
+        # Evaluate data points
+        anomaly_indicator = clf.score_samples(self.all_data) + anomaly_score_threshold
+        self.outliers_indices = [i for i in range(len(self.all_x)) if anomaly_indicator[i] < 0.0]
         self.refill_coordinate_lists()
 
-    OUTLIER_METHODS = {"DBSCAN From Pseudo Code": dbscan_from_pseudocode, "Isolation Forest From Pseudocode": iforest_from_pseudocode}  # "Outlier Detection Using Custom DBSCAN": outlier_detection_using_custom_dbscan,
+    OUTLIER_METHODS = {"DBSCAN": dbscan_from_pseudocode, "Isolation Forest": iforest_from_sklearn}  # "Outlier Detection Using Custom DBSCAN": outlier_detection_using_custom_dbscan,
 
     # Some important variables
     num_of_outliers = None
@@ -172,7 +155,7 @@ class Application:
         ctk.set_default_color_theme("dark-blue")
 
         self.root = ctk.CTk()
-        self.root.geometry("1750x950+70+30")
+        self.root.geometry(self.WINDOW_GEOMETRY)
         self.root.title("Comparison of Data Mining Methods for Outlier Detection")
 
         ### Elements
@@ -305,31 +288,58 @@ class Application:
                                               justify=tk.CENTER)
         self.spinbox_msp_epsilon.bind("<Button-1>", on_click)
         self.replace(self.spinbox_msp_epsilon, self.EPSILON_START)
+
         self.label_msp_minpts = ctk.CTkLabel(master=self.frame_settings, text="MinPts:",
                                              justify=tk.LEFT, text_color=self.LABEL_COLOR)
         self.spinbox_msp_minpts = tk.Spinbox(master=self.frame_settings, from_=1, to=1000, increment=3,
                                              justify=tk.CENTER)
         self.spinbox_msp_minpts.bind("<Button-1>", on_click)
         self.replace(self.spinbox_msp_minpts, self.MINPTS_START)
-        # self.label_msp_pc_outliers = ctk.CTkLabel(master=self.frame_settings, text="Percentage of Outliers:",
-        #                                           justify=tk.LEFT, text_color=self.LABEL_COLOR)
-        # self.spinbox_msp_pc_outliers = tk.Spinbox(master=self.frame_settings, from_=0, to=100,
-        #                                           increment=self.STEP_SIZE_PERCENT, justify=tk.CENTER)
-        # self.spinbox_msp_pc_outliers.bind("<Button-1>", on_click)
-        # self.replace(self.spinbox_msp_pc_outliers, "20")
 
+
+        self.label_msp_t = ctk.CTkLabel(master=self.frame_settings, text="T:",
+                                             justify=tk.LEFT, text_color=self.LABEL_COLOR)
+        self.spinbox_msp_t = tk.Spinbox(master=self.frame_settings, from_=1, to=1000, increment=5,
+                                             justify=tk.CENTER)
+        self.spinbox_msp_t.bind("<Button-1>", on_click)
+        self.replace(self.spinbox_msp_t, self.T_START)
+
+        self.label_msp_psi = ctk.CTkLabel(master=self.frame_settings, text="Psi:",
+                                             justify=tk.LEFT, text_color=self.LABEL_COLOR)
+        self.spinbox_msp_psi = tk.Spinbox(master=self.frame_settings, from_=1, to=10_000, increment=50,
+                                             justify=tk.CENTER)
+        self.spinbox_msp_psi.bind("<Button-1>", on_click)
+        self.replace(self.spinbox_msp_psi, self.PSI_START)
+
+        self.label_msp_anomaly_score_threshold = ctk.CTkLabel(master=self.frame_settings, text="Anomaly Score Threshold:",
+                                             justify=tk.LEFT, text_color=self.LABEL_COLOR)
+        self.spinbox_msp_anomaly_score_threshold = tk.Spinbox(master=self.frame_settings, from_=0, to=1, increment=0.1,
+                                             justify=tk.CENTER)
+        self.spinbox_msp_anomaly_score_threshold.bind("<Button-1>", on_click)
+        self.replace(self.spinbox_msp_anomaly_score_threshold, self.ANOMALY_SCORE_THRESHOLD_START)
 
         def on_select(event):
             a = self.listbox_method.selection_get()
             if a == "0":
                 return
             self.selected_method = a
+
             self.label_msp_epsilon.grid_forget()
             self.spinbox_msp_epsilon.grid_forget()
+
             self.label_msp_minpts.grid_forget()
             self.spinbox_msp_minpts.grid_forget()
-            # self.label_msp_pc_outliers.grid_forget()
-            # self.spinbox_msp_pc_outliers.grid_forget()
+
+            self.label_msp_t.grid_forget()
+            self.spinbox_msp_t.grid_forget()
+
+            self.label_msp_psi.grid_forget()
+            self.spinbox_msp_psi.grid_forget()
+
+            self.label_msp_anomaly_score_threshold.grid_forget()
+            self.spinbox_msp_anomaly_score_threshold.grid_forget()
+
+
             self.label_method.config(text="Outlier Detection Method: " + self.selected_method)
             if self.selected_method == methods[0]:  # DBSCAN
                 self.label_msp_epsilon.grid(row=6, column=0)
@@ -337,20 +347,15 @@ class Application:
                 self.label_msp_minpts.grid(row=7, column=0)
                 self.spinbox_msp_minpts.grid(row=7, column=1)
                 self.update()
-            if self.selected_method == methods[1]:  # Other
-                self.label_msp_epsilon.grid(row=6, column=0)
-                self.spinbox_msp_epsilon.grid(row=6, column=1)
+            if self.selected_method == methods[1]:  # Isolation Forest
+                self.label_msp_t.grid(row=6, column=0)
+                self.spinbox_msp_t.grid(row=6, column=1)
+                self.label_msp_psi.grid(row=7, column=0)
+                self.spinbox_msp_psi.grid(row=7, column=1)
+                self.label_msp_anomaly_score_threshold.grid(row=8, column=0)
+                self.spinbox_msp_anomaly_score_threshold.grid(row=8, column=1)
                 self.update()
-            # if self.selected_method == methods[2]:  # Local Outlier Factor
-            #     self.label_msp_neighbors.grid(row=6, column=0)
-            #     self.spinbox_msp_neighbors.grid(row=6, column=1)
-            #     self.update()
-            # if self.selected_method == methods[2]:  # K Nearest Neighbor
-            #     self.label_msp_neighbors.grid(row=6, column=0)
-            #     self.spinbox_msp_neighbors.grid(row=6, column=1)
-            #     self.label_msp_pc_outliers.grid(row=7, column=0)
-            #     self.spinbox_msp_pc_outliers.grid(row=7, column=1)
-            #     self.update()
+
 
         self.listbox_method.bind("<<ListboxSelect>>", on_select)
 
