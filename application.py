@@ -88,7 +88,7 @@ class Application:
                 self.outlier_y += [y]
 
     class ITree:
-        def __init__(self, x_, current_tree_height, height_limit):
+        def __init__(self, x, current_tree_height, height_limit):
             self.x = x
             self.e = current_tree_height
             self.l = height_limit
