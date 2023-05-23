@@ -186,8 +186,11 @@ class Application:
                 if self.current_circle is not None:
                     self.current_circle.set_color(self.EPSILON_RANGE_GRAY_3_COLOR)
                     self.last_circle = self.current_circle
-                epsilon = float(self.spinbox_msp_epsilon.get())
-                self.current_circle = plt.Circle((x, y), radius=epsilon, color=self.EPSILON_RANGE_RED_COLOR, fill=False, linewidth=self.EPSILON_RANGE_LINEWIDTH * epsilon)
+                if self.selected_method == list(self.OUTLIER_METHODS.keys())[0]:
+                    radius = float(self.spinbox_msp_epsilon.get())
+                else:
+                    radius = 0
+                self.current_circle = plt.Circle((x, y), radius=radius, color=self.EPSILON_RANGE_RED_COLOR, fill=False, linewidth=self.EPSILON_RANGE_LINEWIDTH * radius)
                 plt.gca().add_artist(self.current_circle)
                 self.update()
         self.canvas_graph.mpl_connect("button_press_event", on_graph_click)
