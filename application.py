@@ -6,8 +6,6 @@ import customtkinter as ctk
 import matplotlib.backends.backend_tkagg as tkagg
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy
-from sklearn import *
 
 
 class Application:
@@ -24,6 +22,7 @@ class Application:
     Y_LIM = [-7.5, 7.5]
     STEP_SIZE_PERCENT = 2
     VALID_POINT_COLOR = "#00007f"
+    EPSILON_RANGE_LINEWIDTH = 0.45
     EPSILON_RANGE_RED_COLOR = "#ff0000"
     EPSILON_RANGE_GRAY_3_COLOR = "#999999"
     EPSILON_RANGE_GRAY_2_COLOR = "#bbbbbb"
@@ -42,36 +41,6 @@ class Application:
     def refill_coordinate_lists(self):
         self.outlier_x = [self.all_x[i] for i in self.outliers_indices]
         self.outlier_y = [self.all_y[i] for i in self.outliers_indices]
-
-    def deprecated_outlier_detection_using_custom_dbscan(self):
-        eps = 0.8
-        min_pts = 5
-
-        # Record all distances between any two points that are at the most epsilon apart from each other
-        distances = {}
-        for i in range(len(self.all_data)):
-            for j in range(i + 1, len(self.all_data)):
-                # Calculate Distance
-                euclidean_distance = math.sqrt(
-                    pow(self.all_x[j] - self.all_x[i], 2) + pow(self.all_y[j] - self.all_y[i], 2))
-                # Check if the current two points are neighbors
-                if euclidean_distance <= eps:
-                    # If not already, save neighbors for each of the two points
-                    for k, l in zip([i, j], [j, i]):
-                        if tuple(self.all_data[k]) in distances:
-                            distances[tuple(self.all_data[k])].append(self.all_data[l])
-                        else:
-                            distances.update({tuple(self.all_data[k]): [self.all_data[l]]})
-
-        # Mark all those points as outliers that have less than min_pts neighbors TODO: outlier detection is currently inverted
-        self.outlier_x = []
-        self.outlier_y = []
-        self.num_of_outliers = 0
-        for item in distances.items():
-            if len(item[1]) < min_pts:  # item[1] is a list of all neighbors in the epsilon range
-                self.outlier_x.append(item[0][0])  # item[0][0] is the datapoint's x dimension
-                self.outlier_y.append(item[0][1])  # item[0][1] is the datapoint's y dimension
-                self.num_of_outliers += 1
 
     def _range_query(self, db: np.ndarray, dist: typing.Callable[[tuple[float, float], tuple[float, float]], float], p: tuple[float, float], epsilon: float) -> list:
         """Finds all neighbors in db of a point p in its epsilon neighborhood using dist as a measuring function.
@@ -118,12 +87,19 @@ class Application:
                 self.outlier_x += [x]
                 self.outlier_y += [y]
 
-    def other(self):
-        # TODO
-        self.outliers_indices = [i for i in range(len(self.all_x)) if abs(self.all_x[i] + self.all_y[i]) > 1.0]
+    def _iforest(self, x: list, t: int, psi: int) -> list:
+        pass
+
+    def iforest_from_pseudocode(self):
+        # Creation of forest
+        itrees = self._iforest(x=self.all_data, t=100, psi=256)
+
+        # Evaluation of data
+        anomaly_score_threshold = 0.6
+        self.outliers_indices = [i for i in range(len(self.all_x)) if s(x, n) > 1.0]
         self.refill_coordinate_lists()
 
-    OUTLIER_METHODS = {"DBSCAN From Pseudo Code": dbscan_from_pseudocode, "Other procedure": other}  # "Outlier Detection Using Custom DBSCAN": outlier_detection_using_custom_dbscan,
+    OUTLIER_METHODS = {"DBSCAN From Pseudo Code": dbscan_from_pseudocode, "Isolation Forest From Pseudocode": iforest_from_pseudocode}  # "Outlier Detection Using Custom DBSCAN": outlier_detection_using_custom_dbscan,
 
     # Some important variables
     num_of_outliers = None
@@ -202,7 +178,8 @@ class Application:
                 if self.current_circle is not None:
                     self.current_circle.set_color(self.EPSILON_RANGE_GRAY_3_COLOR)
                     self.last_circle = self.current_circle
-                self.current_circle = plt.Circle((x, y), float(self.spinbox_msp_epsilon.get()), color=self.EPSILON_RANGE_RED_COLOR, fill=False)
+                epsilon = float(self.spinbox_msp_epsilon.get())
+                self.current_circle = plt.Circle((x, y), radius=epsilon, color=self.EPSILON_RANGE_RED_COLOR, fill=False, linewidth=self.EPSILON_RANGE_LINEWIDTH * epsilon)
                 plt.gca().add_artist(self.current_circle)
                 self.update()
         self.canvas_graph.mpl_connect("button_press_event", on_graph_click)
