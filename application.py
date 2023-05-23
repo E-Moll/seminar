@@ -12,7 +12,7 @@ from sklearn.ensemble import IsolationForest
 class Application:
     # Constants
     WINDOW_GEOMETRY = "1750x950+70+30"
-    NUM_DATAPOINTS_START = "1"
+    NUM_DATAPOINTS_START = "100"
     STEP_SIZE_DP = "100"
     NORMAL_PERCENTAGE_START = "80"
     EPSILON_START = "2.5"
@@ -21,8 +21,8 @@ class Application:
     PSI_START = "256"
     ANOMALY_SCORE_THRESHOLD_START = "0.5"
     EDITABLE_MEASURES = ["Data Point Nr.", "Min (for eq. dist.)", "Max (for eq. dist.)", "µ", "σ"]
-    INITIAL_VALUES = [["km/h", "# of cars"], [-10.0, 10.0, -10.0], [-10.0, 10.0, 10.0], [-10.0, 10.0, 1.5],
-                      [0.0, 10.0, 4.0]]  # [<MIN>, <MAX>, <INITIAL>]
+    INITIAL_VALUES = [["km/h", "# of cars"], [-10.0, 10.0, -10.0], [-10.0, 10.0, 10.0], [-10.0, 10.0, 0.0],
+                      [0.0, 10.0, 1.0]]  # [<MIN>, <MAX>, <INITIAL>]
     X_LIM = [-10.0, 10.0]
     Y_LIM = [-7.5, 7.5]
     STEP_SIZE_PERCENT = 2
