@@ -87,8 +87,33 @@ class Application:
                 self.outlier_x += [x]
                 self.outlier_y += [y]
 
+    class ITree:
+        def __init__(self, x_, current_tree_height, height_limit):
+            self.x = x
+            self.e = current_tree_height
+            self.l = height_limit
+
+            if self.e >= self.l or len(self.x) <= 1:
+                return None  # TODO return exNode{Size ← |X|}
+            else:
+                # random_attribute
+                if random.randint(0, 1) == 0:
+                    q = Application.all_x
+                else:
+                    q = Application.all_y
+                min_q = min(q)
+                p = (random.random() * max(q) - min_q) + min_q  # random_split_value
+
+    def _sample(self, x, psi):
+        return None  # TODO
+
     def _iforest(self, x: list, t: int, psi: int) -> list:
-        pass
+        forest = []  # TODO Initialize Forest
+        l = math.ceil(math.log(x=psi, base=2))
+        for i in range(t):
+            x_ = self._sample(x, psi)
+            forest += [self.ITree(x_, 0, l)]
+        return forest
 
     def iforest_from_pseudocode(self):
         # Creation of forest
